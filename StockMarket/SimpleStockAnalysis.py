@@ -1,84 +1,65 @@
-import tkinter as tk
+import sys
 import yfinance as yf
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-import mplfinance as mpf
+from matplotlib.backends.backend_qt5agg import FigureCanvas
+from matplotlib.backends.backend_qt5 import FigureManager
+from PyQt5 import QtWidgets, uic
 
+class StockDataViewer(QtWidgets.QMainWindow):
+    def __init__(self):
+        super(StockDataViewer, self).__init__()
+        uic.loadUi("stock_data_viewer.ui", self)
 
-class GUIActions:
-    def __init__(self, window):
-        self.window = window
-
-        self.label = tk.Label(self.window, text="Enter Stock Name:")
-        self.label.pack()
-        self.entry = tk.Entry(self.window)
-        self.entry.pack()
-
-        self.button = tk.Button(self.window, text="Fetch and Plot Data", command=self.fetch_and_plot_data)
-        self.button.pack()
-
-        self.chart_type_label = tk.Label(self.window, text="Select Chart Type:")
-        self.chart_type_label.pack()
-        self.chart_type = tk.StringVar(value='Line')
-        self.chart_type_radiobutton1 = tk.Radiobutton(self.window, text="Line", variable=self.chart_type, value='Line', command=self.update_chart_type)
-        self.chart_type_radiobutton1.pack()
-        self.chart_type_radiobutton2 = tk.Radiobutton(self.window, text="Candlestick", variable=self.chart_type, value='Candlestick', command=self.update_chart_type)
-        self.chart_type_radiobutton2.pack()
-
-        self.zoom_enabled = tk.BooleanVar(value=False)
-        self.zoom_checkbox = tk.Checkbutton(self.window, text="Enable Zoom", variable=self.zoom_enabled)
-        self.zoom_checkbox.pack()
+        self.button.clicked.connect(self.fetch_and_plot_data)
+        self.chart_type_radiobutton1.toggled.connect(self.update_chart_type)
+        self.chart_type_radiobutton2.toggled.connect(self.update_chart_type)
 
     def fetch_and_plot_data(self):
-        stock_name = self.entry.get() + '.NS'
-        stock_actions = StockActions()
+        stock_name = self.entry.text() + '.NS'
 
         try:
-            historical_data = stock_actions.fetch_historical_data(stock_name)
+            # Fetch historical stock data
+            ticker = yf.Ticker(stock_name)
+            historical_data = ticker.history(period='max')
 
-            if historical_data is not None:
-                stock_actions.plot_stock_data(stock_name, historical_data, self.chart_type.get(), self.zoom_enabled.get())
-                plt.show()
+            # Plotting the stock data
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.set_title(stock_name + ' Stock Price')
+
+            # Check if candlestick chart is selected
+            if self.chart_type_radiobutton2.isChecked():
+                mpf.plot(historical_data, type='candle', ax=ax, volume=True, show_nontrading=True)
+            else:
+                ax.plot(historical_data.index, historical_data['Close'], label='Close Price')
+                ax.set_xlabel('Date')
+                ax.set_ylabel('Price')
+                ax.legend()
+
+            # Enable zooming in and out
+            if self.zoom_checkbox.isChecked():
+                ax.axis('zoomed')
+
+            
+
+            # Create the canvas
+            canvas = FigureCanvas(fig)
+            self.canvas_layout.addWidget(canvas)
+
+            # Create the figure manager
+            figure_manager = FigureManager(canvas, 1)
+            figure_manager.canvas.figure = fig
+            fig.set_canvas(figure_manager.canvas)
 
         except Exception as e:
-            self.label.config(text="Error fetching data for " + stock_name)
+            self.statusbar.showMessage("Error fetching data for " + stock_name)
 
     def update_chart_type(self):
-        chart_selected = self.chart_type.get()
-        if chart_selected == 'Candlestick':
-            self.zoom_checkbox.deselect()
-            self.zoom_checkbox.config(state='disabled')
-        else:
-            self.zoom_checkbox.config(state='normal')
-
-
-class StockActions:
-    def fetch_historical_data(self, stock_name):
-        ticker = yf.Ticker(stock_name)
-        historical_data = ticker.history(period='max')
-        return historical_data
-
-    def plot_stock_data(self, stock_name, historical_data, chart_type, zoom_enabled):
-        fig, ax = plt.subplots(figsize=(10, 6))
-        ax.set_title(stock_name + ' Stock Price')
-
-        if chart_type == 'Candlestick':
-            mpf.plot(historical_data, type='candle', ax=ax, volume=True, show_nontrading=True)
-        else:
-            ax.plot(historical_data.index, historical_data['Close'], label='Close Price')
-            ax.set_xlabel('Date')
-            ax.set_ylabel('Price')
-            ax.legend()
-
-        if zoom_enabled:
-            ax.axis('zoomed')
-
+        chart_selected = "Candlestick" if self.chart_type_radiobutton2.isChecked() else "Line"
+        self.zoom_checkbox.setChecked(False)
+        self.zoom_checkbox.setEnabled(chart_selected != "Candlestick")
 
 if __name__ == "__main__":
-    window = tk.Tk()
-    window.title("Stock Data Viewer")
-    window.geometry("800x600")
-
-    gui_actions = GUIActions(window)
-
-    window.mainloop()
+    app = QtWidgets.QApplication(sys.argv)
+    window = StockDataViewer()
+    window.show()
+    sys.exit(app.exec_())

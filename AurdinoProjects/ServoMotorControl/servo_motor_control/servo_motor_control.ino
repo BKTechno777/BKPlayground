@@ -21,4 +21,5 @@ void loop() {
     delay(15);
   }
   
+  Serial.print("ULTRASONIC=");
 }
