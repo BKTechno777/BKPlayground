@@ -1,5 +1,5 @@
-/x64/
-*.user
+x64/
 *.sln
+*.user
 .*
 !/.gitignore
